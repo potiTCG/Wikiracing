@@ -205,19 +205,33 @@ const broadcast=()=>{for(const c of conns)send(c,{type:"state",state})};
 function upMe(){
   me.n=myName();
   const v={n:me.n,st:me.st,p:me.p,c:me.c,ms:me.ms,path:me.path.slice(-60),rr:me.rr||0,last:me.last||null};
-  if(host){state.players[myId]=v;broadcast();render()}else if(hostConn)send(hostConn,{type:"me",v});
+  if(host){state.players[myId]=v;checkEnd();broadcast();render()}else if(hostConn)send(hostConn,{type:"me",v});
 }
 function onState(s){
   const prevRound=state.round,prevGo=state.go;state=s;
   if(s.round!==prevRound&&prevRound&&me.st!=="lobby"){pending=true;if(me.st==="race")toast("Une nouvelle course t'attend dans la salle quand tu auras fini.")}
   if(s.go&&s.go!==prevGo&&me.st==="lobby"&&!$("lobby").hidden)countdown();
-  lateGo=s.go&&me.rr!==s.round?s.go:null;
+  lateGo=s.go&&me.rr!==s.round&&!(s.end&&s.end.rd===s.round)?s.go:null;
+  if(s.end&&race&&s.end.rd===race.round&&(me.st==="race"||me.st==="cd"))cut();
   render();
 }
 function hostMsg(c,m){
   if(!m||typeof m!=="object")return;
-  if(m.type==="me"&&m.v&&typeof m.v==="object"){const v=m.v;state.players[c.peer]={n:String(v.n||"Joueur").slice(0,18),st:String(v.st||""),p:String(v.p||"").slice(0,200),c:+v.c||0,ms:+v.ms||0,path:Array.isArray(v.path)?v.path.slice(-60).map(x=>String(x).slice(0,200)):[],rr:+v.rr||0,last:v.last&&typeof v.last==="object"?{rd:+v.last.rd||0,st:String(v.last.st||"").slice(0,8),c:+v.last.c||0,ms:+v.last.ms||0}:null};broadcast();render()}
+  if(m.type==="me"&&m.v&&typeof m.v==="object"){const v=m.v;state.players[c.peer]={n:String(v.n||"Joueur").slice(0,18),st:String(v.st||""),p:String(v.p||"").slice(0,200),c:+v.c||0,ms:+v.ms||0,path:Array.isArray(v.path)?v.path.slice(-60).map(x=>String(x).slice(0,200)):[],rr:+v.rr||0,last:v.last&&typeof v.last==="object"?{rd:+v.last.rd||0,st:String(v.last.st||"").slice(0,8),c:+v.last.c||0,ms:+v.last.ms||0}:null};checkEnd();broadcast();render()}
   if(m.type==="start"&&me.st==="lobby"){startGo()}
+}
+function hostCut(){if(state.end&&race&&state.end.rd===race.round&&(me.st==="race"||me.st==="cd"))setTimeout(cut,0)}
+function checkEnd(){
+  if(!host||(state.end&&state.end.rd===state.round))return;
+  const ps=Object.entries(state.players).filter(([,v])=>v.rr===state.round&&["race","cd","done","quit"].includes(v.st));
+  if(!ps.length)return;
+  const done=ps.filter(([,v])=>v.st==="done"),racing=ps.filter(([,v])=>v.st==="race"||v.st==="cd");
+  let win=null;
+  if(state.mode==="t"){if(done.length)win=done.sort((a,b)=>a[1].ms-b[1].ms)[0]}
+  else if(done.length){const b=done.sort((a,b)=>a[1].c-b[1].c||a[1].ms-b[1].ms)[0];if(racing.every(([,v])=>v.c>=b[1].c))win=b}
+  if(win)state.end={rd:state.round,id:win[0],n:win[1].n,c:win[1].c,ms:win[1].ms};
+  else if(!racing.length)state.end={rd:state.round,id:null,n:null};
+  hostCut();
 }
 function openRoom(code){
   roomCode=code;store.set("wr-name",myName());
@@ -290,14 +304,14 @@ $("copylink").onclick=()=>copy($("llink").textContent,"Lien copié");
 function copy(t,msg){try{navigator.clipboard.writeText(t).then(()=>toast(msg),()=>toast("Copie refusée"))}catch(e){toast("Copie impossible")}}
 
 /* ---------- Course ---------- */
-function startGo(){state.go=Date.now()+"-"+Math.random().toString(36).slice(2,6);broadcast();countdown()}
+function startGo(){state.end=null;state.go=Date.now()+"-"+Math.random().toString(36).slice(2,6);broadcast();countdown()}
 $("go").onclick=()=>{if(me.st!=="lobby")return;if(lateGo){countdown();return}if(host)startGo();else if(hostConn)send(hostConn,{type:"start"});else countdown()};
 let t0=0,tick=0,hist=[],seen=new Set(),loadingTok=0,race=null,pending=false;
 function countdown(){
   if(me.st!=="lobby")return;me.st="cd";race={s:state.s,t:state.t,mode:state.mode,round:state.round};me.rr=state.round;pending=false;
   let n=3;$("cdn").textContent=n;$("cd").classList.add("on");
   article(race.s.title).catch(()=>{}); // préchauffe
-  const h=setInterval(()=>{n--;if(n>0)$("cdn").textContent=n;else{clearInterval(h);$("cd").classList.remove("on");startRace()}},800);
+  const h=setInterval(()=>{n--;if(n>0)$("cdn").textContent=n;else{clearInterval(h);$("cd").classList.remove("on");if(me.st==="cd")startRace()}},800);
 }
 function startRace(){
   me.st="race";me.c=0;me.ms=0;me.path=[race.s.title];hist=[];seen=new Set();t0=performance.now();
@@ -325,6 +339,7 @@ $("art").onclick=e=>{const a=e.target.closest("a.go");if(!a||me.st!=="race")retu
   load(t)};
 $("back").onclick=()=>{if(!hist.length||me.st!=="race")return;const t=hist.pop();me.c++;me.path.push(t);load(t)};
 $("quit").onclick=()=>{if(me.st==="race")finish(false)};
+function cut(){clearInterval(tick);loadingTok++;$("cd").classList.remove("on");me.ms=Math.round(performance.now()-t0);me.st="cut";me.last={rd:race.round,st:"cut",c:me.c,ms:me.ms};show("end");upMe();renderEnd()}
 function finish(ok){clearInterval(tick);loadingTok++;me.ms=Math.round(performance.now()-t0);me.st=ok?"done":"quit";me.last={rd:race.round,st:me.st,c:me.c,ms:me.ms};if(ok)me.p=race.t.title;show("end");upMe();renderEnd()}
 function renderOpp(){
   $("opp").innerHTML=Object.entries(state.players).filter(([id,v])=>id!==myId&&v.st!=="lobby").map(([id,v])=>{
@@ -338,17 +353,18 @@ function renderEnd(){
   all=all.map(x=>x.me?{...x,st:me.st,c:me.c,ms:me.ms}:x);
   const fin=all.filter(x=>x.st==="done").sort((a,b)=>race.mode==="t"?a.ms-b.ms||a.c-b.c:a.c-b.c||a.ms-b.ms),rest=all.filter(x=>x.st!=="done");
   $("eres").innerHTML=fin.map((x,i)=>`<tr class="${x.me?"me":""}"><td class="pos">${i+1}</td><td>${esc(x.n)}${x.me?" (toi)":""}</td><td class="n">${x.c} clic${x.c>1?"s":""}</td><td class="n">${fmt(x.ms)}</td></tr>`).join("")+
-    rest.map(x=>`<tr class="${x.me?"me":""}"><td class="pos">–</td><td>${esc(x.n)}${x.me?" (toi)":""}</td><td class="n" colspan="2">${x.st==="quit"?"abandon":x.st==="wait"?"pas dans cette course":"en course…"}</td></tr>`).join("");
+    rest.map(x=>`<tr class="${x.me?"me":""}"><td class="pos">–</td><td>${esc(x.n)}${x.me?" (toi)":""}</td><td class="n" colspan="2">${x.st==="quit"?"abandon":x.st==="cut"?"coupé à "+x.c+" clic"+(x.c>1?"s":""):x.st==="wait"?"pas dans cette course":"en course…"}</td></tr>`).join("");
   $("ek").textContent=race.mode==="t"?"Classement · au temps":"Classement · au nombre de clics";
   const rank=fin.findIndex(x=>x.me);
-  $("etitle").textContent=me.st!=="done"?"Abandon.":rank===0&&fin.length>1&&!rest.length?"Victoire !":rank===0&&fin.length>1?"En tête !":"Arrivé !";
-  $("elead").textContent=me.st==="done"?`${race.s.title} → ${race.t.title} en ${me.c} clic${me.c>1?"s":""} et ${fmt(me.ms)}.`:`Il fallait aller de ${race.s.title} à ${race.t.title}.`;
+  const E=state.end&&state.end.rd===race.round?state.end:null;
+  $("etitle").textContent=E&&E.n?(E.id===myId?"Tu as gagné !":E.n+" a gagné !"):me.st==="quit"?"Abandon.":me.st==="done"?"Arrivé !":"Course terminée";
+  $("elead").textContent=E&&E.n&&E.id!==myId?`${E.n} a atteint ${race.t.title} en ${E.c} clic${E.c>1?"s":""} et ${fmt(E.ms)}.`:me.st==="done"?`${race.s.title} → ${race.t.title} en ${me.c} clic${me.c>1?"s":""} et ${fmt(me.ms)}.`:`Il fallait aller de ${race.s.title} à ${race.t.title}.`;
   $("mypath").innerHTML=me.path.map((x,i)=>`<span class="chip ${i==0?"s":norm(x)===norm(race.t.title)?"t":""}">${esc(x)}</span>`).join('<span class="arr">→</span>');
-  const racing=all.filter(x=>!x.me&&(x.st==="race"||x.st==="cd")).length;
+  const racing=E?0:all.filter(x=>!x.me&&(x.st==="race"||x.st==="cd")).length;
   $("again").textContent=pending?"Rejoindre la nouvelle course":host?(racing?`Nouvelle course (${racing} encore en course)`:"Nouvelle course dans la salle"):"Revenir à la salle";
 }
 function toLobby(){clearInterval(tick);loadingTok++;pending=false;me={n:myName(),st:"lobby",p:"",c:0,ms:0,path:[],rr:me.rr,last:me.last};show("lobby");upMe();render()}
-$("again").onclick=()=>{if(host&&!pending&&state.round===(race&&race.round)){state.round++;state.go=0;toLobby();draw()}else toLobby()};
+$("again").onclick=()=>{if(host&&!pending&&state.round===(race&&race.round)){state.round++;state.go=0;state.end=null;toLobby();draw()}else toLobby()};
 $("copyres").onclick=()=>copy(`Wiki Racing — ${race.s.title} → ${race.t.title} : ${me.st==="done"?me.c+" clics en "+fmt(me.ms):"abandon"}\n${me.path.join(" → ")}`,"Résultat copié");
 $("create").onclick=()=>openRoom(Math.random().toString(36).slice(2,8));
 nameIn.onchange=()=>{store.set("wr-name",myName());upMe()};
