@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wiki Racing entre potes</title>
+<meta name="description" content="Course Wikipédia entre amis : du départ à l'arrivée en cliquant de lien en lien.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{color-scheme:light dark;--bg:light-dark(#fff,#111316);--ink:light-dark(#111,#eef0f2);--mut:light-dark(#5d6168,#9aa1aa);--line:light-dark(#e3e5e8,#2a2e34);--card:light-dark(#f4f5f7,#1a1d22);--link:light-dark(#2c5fd4,#8db3ff);--acc:#ff2e4d;--ok:light-dark(#0b7a43,#4fd08f)}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Source Serif 4",Georgia,serif;overflow-x:clip}
+h1,h2,.ui,button,input,.hud{font-family:Archivo,system-ui,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:0 max(4vw,16px)}
+.flag{height:14px;background:repeating-conic-gradient(var(--ink) 0 25%,var(--bg) 0 50%) 0 0/14px 14px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0}
+.logo{font:800 22px/1 Archivo,sans-serif;font-stretch:75%}.logo b{color:var(--acc)}
+.net{font:600 13px Archivo;color:var(--mut)}
+h1.hero{font-weight:850;font-stretch:72%;font-size:clamp(40px,11vw,64px);line-height:1;margin:18px 0 10px;text-wrap:balance}
+h2{font-weight:800;font-stretch:80%;font-size:24px;line-height:1.1;margin:24px 0 10px}
+.lead{font-size:18px;color:var(--mut);margin:0 0 18px}
+label.f{display:block;font:600 14px Archivo,sans-serif;margin:16px 0 6px}
+input{font:500 16px Archivo,sans-serif;width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);min-height:48px}
+input:focus-visible,button:focus-visible{outline:3px solid var(--link);outline-offset:2px}
+.modes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.mode{text-align:left;padding:14px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.mode b{display:block;font:800 20px/1.1 Archivo;font-stretch:80%}.mode span{font:500 13.5px/1.35 Archivo;color:var(--mut)}
+.mode[aria-pressed=true]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.mode:disabled{cursor:default}
+.btn{font:750 17px Archivo,sans-serif;border:0;border-radius:14px;padding:14px 18px;min-height:52px;cursor:pointer;background:var(--ink);color:var(--bg);width:100%}
+.btn.red{background:var(--acc);color:#fff}.btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:10px;margin-top:12px}.row>*{flex:1}
+.card{background:var(--card);border-radius:18px;padding:18px;margin:14px 0}
+.k{font:650 13px Archivo,sans-serif;color:var(--mut);margin:0 0 4px}
+.big{font:850 30px/1.05 Archivo,sans-serif;font-stretch:75%;margin:0}
+.desc{margin:8px 0 0;font-size:16px}
+.route{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.route .card{margin:0}.tgt{background:var(--acc)!important;color:#fff}.tgt .k{color:#ffd9df}
+.tgt img,.src img{float:right;width:84px;height:84px;object-fit:cover;border-radius:10px;margin:0 0 8px 12px;background:#fff}
+.code{font:700 15px ui-monospace,Menlo,monospace;word-break:break-all;background:var(--bg);border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;margin:8px 0 0}
+.players{list-style:none;margin:8px 0 0;padding:0}
+.players li{display:flex;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font:600 16px Archivo}
+.players li span{color:var(--mut);font-weight:500;font-size:14px;text-align:right}
+.note{font:500 14px/1.45 Archivo,sans-serif;color:var(--mut);margin:10px 0}
+.hud{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1.5px solid var(--line)}
+.hudin{display:flex;align-items:center;gap:10px;padding:10px 0}
+.tg{flex:1;text-align:left;background:var(--acc);color:#fff;border:0;border-radius:12px;padding:8px 12px;cursor:pointer;min-height:44px;font-family:Archivo}
+.tg small{display:block;font:600 11.5px Archivo;opacity:.85}.tg strong{font:800 18px/1.1 Archivo;font-stretch:80%}
+.stat{text-align:right;font:800 20px/1 Archivo;font-variant-numeric:tabular-nums;white-space:nowrap}.stat small{display:block;font:600 11.5px Archivo;color:var(--mut)}
+.tdesc{padding:0 0 12px;font-size:15px;display:none}.tdesc.on{display:block}
+.opp{display:flex;gap:6px;overflow-x:auto;padding:0 0 10px;font:600 13px Archivo}.opp:empty{display:none}
+.opp span{flex:none;background:var(--card);border-radius:999px;padding:5px 10px}.opp span.fin{background:var(--ok);color:var(--bg)}
+#art>h1{font:500 clamp(30px,8vw,42px)/1.15 "Source Serif 4",Georgia,serif;border-bottom:1px solid var(--line);padding-bottom:8px;margin:22px 0 6px}
+#art .from{font:italic 14px "Source Serif 4";color:var(--mut);margin:0 0 16px}
+.mw{font-size:17px;line-height:1.65}
+.mw a.go{color:var(--link);text-decoration:none;cursor:pointer}.mw a.go:hover{text-decoration:underline}.mw a.go.seen{color:light-dark(#6b4bb8,#c2a8ff)}
+.mw .dead{color:inherit}
+.mw img{max-width:100%;height:auto}
+.mw table{border-collapse:collapse;font-size:14px;margin:12px 0}
+.mw td,.mw th{border:1px solid var(--line);padding:4px 6px;vertical-align:top}
+.mw .tw{overflow-x:auto;margin:12px 0}
+.mw .infobox,.mw .infobox_v2,.mw .infobox_v3,.mw .thumb,.mw figure{float:none!important;width:auto!important;max-width:100%;margin:12px 0!important;background:var(--card);border-radius:12px;padding:8px}
+.mw .infobox_v3 .entete,.mw .infobox_v2 caption{font:700 16px Archivo}
+.mw h2,.mw h3,.mw h4{font-family:Archivo;font-stretch:85%;line-height:1.2;margin:26px 0 8px}
+.mw .mw-editsection,.mw sup.reference,.mw .reference,.mw .references,.mw .navbox,.mw .navbox-container,.mw .metadata,.mw .bandeau-container,.mw .bandeau-portail,.mw .homonymie,.mw .noprint,.mw #toc,.mw .toc,.mw .mw-empty-elt,.mw .printfooter,.mw .catlinks,.mw .autres-projets,.mw .bandeau-article{display:none!important}
+.mw .hatnote{font-style:italic;color:var(--mut)}
+.loading{padding:40px 0;color:var(--mut);font:600 16px Archivo}
+.tools{display:flex;gap:10px;margin:24px 0 40px}.tools .btn{font-size:15px;min-height:46px}
+.cd{position:fixed;inset:0;display:none;place-items:center;background:color-mix(in srgb,var(--bg) 88%,transparent);z-index:20}
+.cd.on{display:grid}.cd b{font:900 min(40vw,220px)/1 Archivo;font-stretch:70%;color:var(--acc)}
+.res{width:100%;border-collapse:collapse;font:600 16px Archivo;margin-top:8px}
+.res td{padding:11px 4px;border-bottom:1px solid var(--line)}.res td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.res tr.me td{color:var(--acc)}.pos{width:2.2em;font-weight:850}
+.path{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.chip{font:700 14px Archivo,sans-serif;padding:6px 10px;border-radius:999px;background:var(--bg);border:1.5px solid var(--line)}
+.chip.s{background:var(--ink);color:var(--bg);border-color:var(--ink)}.chip.t{background:var(--acc);color:#fff;border-color:var(--acc)}
+.arr{color:var(--mut);font:700 16px Archivo}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);font:600 14px Archivo;padding:10px 16px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+section[hidden]{display:none}
+@media(min-width:620px){.route{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+</style></head><body>
+<div class="flag"></div>
+<div class="wrap"><header class="top"><div class="logo">wiki<b>·</b>racing</div><div class="net" id="net"></div></header></div>
+
+<section id="home" class="wrap">
+  <h1 class="hero">Une page Wikipédia, un mot à atteindre, que des liens.</h1>
+  <p class="lead">Crée une salle, envoie le lien à 1 ou 2 amis, et partez en même temps sur le vrai Wikipédia.</p>
+  <label class="f" for="name">Ton pseudo</label>
+  <input id="name" maxlength="18" autocomplete="nickname">
+  <div class="row"><button class="btn red" id="create">Créer une salle</button></div>
+  <p class="note">Tu as reçu un lien ? Ouvre-le directement, tu arriveras dans la salle de ton ami.</p>
+</section>
+
+<section id="lobby" class="wrap" hidden>
+  <h2 id="lhead">Salle</h2>
+  <div class="modes" id="modes">
+    <button class="mode" data-m="t" aria-pressed="true"><b>Chrono</b><span>Le premier arrivé gagne.</span></button>
+    <button class="mode" data-m="c" aria-pressed="false"><b>Moins de clics</b><span>Le chemin le plus court gagne.</span></button>
+  </div>
+  <div class="route" style="margin-top:14px">
+    <div class="card src"><p class="k">Départ</p><p class="big" id="ls">…</p><p class="desc" id="lsd"></p></div>
+    <div class="card tgt"><p class="k">Arrivée — à trouver</p><p class="big" id="lt">…</p><p class="desc" id="ltd"></p></div>
+  </div>
+  <div id="hostctl">
+    <div class="row"><button class="btn ghost" id="reroll">Autre tirage</button></div>
+    <div class="row"><input id="cs" placeholder="Départ perso (ex : Sushi)"><input id="ct" placeholder="Arrivée perso"></div>
+    <div class="row"><button class="btn ghost" id="custom">Utiliser ces pages</button></div>
+  </div>
+  <div class="card"><p class="k">Envoie ce lien à 1 ou 2 amis</p>
+    <div class="code" id="llink"></div>
+    <div class="row"><button class="btn ghost" id="copylink">Copier le lien</button></div>
+  </div>
+  <div class="card"><p class="k">Sur la ligne de départ</p><ul class="players" id="lplayers"></ul><p class="note" id="lnote"></p></div>
+  <div class="row"><button class="btn red" id="go">Lancer la course</button></div>
+  <p class="note">Quand quelqu'un lance, le compte à rebours part pour tout le monde. Revenir en arrière compte comme un clic. Le créateur de la salle doit garder la page ouverte.</p>
+</section>
+
+<section id="race" hidden>
+  <div class="hud"><div class="wrap">
+    <div class="hudin">
+      <button class="tg" id="tgbtn" aria-expanded="false"><small>Objectif · touche pour la définition</small><strong id="tgname"></strong></button>
+      <div class="stat"><small>temps</small><span id="clock">0:00</span></div>
+      <div class="stat"><small>clics</small><span id="clicks">0</span></div>
+    </div>
+    <div class="tdesc" id="tdesc"></div>
+    <div class="opp" id="opp"></div>
+  </div></div>
+  <div class="wrap"><div id="art"></div>
+    <div class="tools"><button class="btn ghost" id="back">← Retour (+1 clic)</button><button class="btn ghost" id="quit">Abandonner</button></div>
+  </div>
+</section>
+
+<section id="end" class="wrap" hidden>
+  <h1 class="hero" id="etitle"></h1>
+  <p class="lead" id="elead"></p>
+  <div class="card"><p class="k" id="ek">Classement</p><table class="res"><tbody id="eres"></tbody></table></div>
+  <div class="card"><p class="k">Ton parcours</p><div class="path" id="mypath"></div></div>
+  <div class="row"><button class="btn ghost" id="copyres">Copier mon résultat</button></div>
+  <div class="row"><button class="btn red" id="again">Nouvelle course dans la salle</button></div>
+</section>
+
+<div class="cd" id="cd"><b id="cdn">3</b></div>
+<div class="toast" id="toast"></div>
+
+<script>
+{
+const API="https://fr.wikipedia.org/w/api.php",REST="https://fr.wikipedia.org/api/rest_v1/page/summary/";
+const POOL=["Japon","Tokyo","Kyoto","Mont Fuji","Volcan","Séisme","Samouraï","Sushi","Riz","Manga","Anime","Nintendo","Jeu vidéo","Mario (personnage)","Pokémon","Ordinateur","Internet","Wikipédia","Encyclopédie","Denis Diderot","Siècle des Lumières","Révolution française","Napoléon Ier","Paris","Tour Eiffel","Fer","Acier","France","Football","Coupe du monde de football","Brésil","Pelé","Caoutchouc","Amazonie","Forêt","Arbre","Photosynthèse","Soleil","Étoile","Galaxie","Terre","Lune","Marée","Océan","Baleine","Mammifère","Chat","Égypte antique","Pyramide","Pharaon","Nil","Afrique","Café","Éthiopie","Chocolat","Cacao","Aztèques","Mexique","Maïs","Cinéma","Auguste et Louis Lumière","Photographie","Couleur","Arc-en-ciel","Pluie","Nuage","Eau","Glace","Neige","Antarctique","Manchot empereur","Oiseau","Dinosaures","Météorite","Musique","Rap","New York","États-Unis","Jazz","Piano","Wolfgang Amadeus Mozart","Vienne (Autriche)","Échecs","Inde","Bouddhisme","Thé","Chine","Grande Muraille","Papier","Livre","Imprimerie","Johannes Gutenberg","Électricité","Foudre","Benjamin Franklin","Fusée","Pizza","Italie","Rome","Empire romain","Jules César","Gladiateur","Colisée","Vin","Fromage","Baguette (pain)","Croissant","Londres","The Beatles","Rock","Guitare","Elvis Presley","Michael Jackson","Hollywood","Star Wars","Harry Potter","Dragon","Licorne","Chevalier","Moyen Âge","Château fort","Viking","Norvège","Aurore polaire","Ours polaire","Requin","Dauphin","Pieuvre","Abeille","Miel","Fourmi","Araignée","Serpent","Crocodile","Lion","Éléphant","Girafe","Kangourou","Australie","Sydney","Surf","Skateboard","Jeux olympiques","Tennis","Basket-ball","Michael Jordan","Formule 1","Automobile","Vélo","Tour de France","Avion","Frères Wright","Train","Métro","Bateau","Titanic","Iceberg","Pirate","Trésor","Or","Diamant","Pétrole","Plastique","Recyclage","Changement climatique","Désert","Sahara","Chameau","Oasis","Pyramides de Gizeh","Albert Einstein","Isaac Newton","Gravitation","Pomme","Atome","Bombe atomique","Seconde Guerre mondiale","Charles de Gaulle","Marie Curie","Radioactivité","ADN","Cellule (biologie)","Virus","Vaccin","Louis Pasteur","Lait","Vache","Agriculture","Pain","Blé","Bière","Moine","Cathédrale Notre-Dame de Paris","Victor Hugo","Les Misérables","Opéra","Danse","Hip-hop","Graffiti","Banksy","Peinture","La Joconde","Léonard de Vinci","Hélicoptère","Robot","Intelligence artificielle","Smartphone","Apple","Steve Jobs","Google","YouTube","TikTok","Emoji","Bande dessinée","Astérix","Tintin","Belgique","Frite","Pomme de terre","Ketchup","Tomate","Hamburger","McDonald's","Coca-Cola","Sucre","Dent","Brosse à dents","Sommeil","Rêve","Cerveau","Cœur","Sang"];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+const fmt=ms=>{const s=Math.floor(ms/1000);return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")};
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const toast=m=>{const t=$("toast");t.textContent=m;t.classList.add("on");clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove("on"),2200)};
+const show=id=>{for(const s of["home","lobby","race","end"])$(s).hidden=s!==id;window.scrollTo(0,0)};
+const norm=t=>String(t||"").replace(/_/g," ").trim().toLowerCase();
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const nameIn=$("name");nameIn.value=store.get("wr-name")||("Joueur "+(10+Math.floor(Math.random()*90)));
+const myName=()=>(nameIn.value.trim()||"Joueur").slice(0,18);
+
+/* ---------- Wikipédia ---------- */
+const sumCache={};
+async function summary(title){
+  if(sumCache[title])return sumCache[title];
+  const r=await fetch(REST+encodeURIComponent(title.replace(/ /g,"_"))+"?redirect=true");
+  if(!r.ok)throw new Error("introuvable");
+  const j=await r.json();if(j.type==="disambiguation")throw new Error("homonymie");
+  const o={title:j.title,extract:j.extract||"",desc:j.description||"",img:j.thumbnail&&j.thumbnail.source||""};
+  sumCache[title]=sumCache[o.title]=o;return o;
+}
+async function article(title){
+  const u=API+"?action=parse&format=json&formatversion=2&origin=*&redirects=1&prop=text&disableeditsection=1&disabletoc=1&page="+encodeURIComponent(title);
+  const j=await(await fetch(u)).json();
+  if(j.error)throw new Error(j.error.info||"erreur");
+  return{title:j.parse.title,html:j.parse.text};
+}
+const BADNS=/^(Fichier|File|Image|Catégorie|Category|Aide|Help|Portail|Modèle|Template|Spécial|Special|Wikipédia|Wikipedia|Projet|Discussion|Utilisateur|Utilisatrice|Module|Référence|MediaWiki|Sujet|Talk|User)(\s|_)?:/i;
+function clean(html){
+  const d=new DOMParser().parseFromString(html,"text/html");
+  d.querySelectorAll("script,style,link,meta,iframe,object,embed,form,input,button").forEach(e=>e.remove());
+  d.querySelectorAll("*").forEach(e=>{for(const a of[...e.attributes])if(/^on/i.test(a.name)||a.name==="style"&&/position\s*:\s*(fixed|absolute)/i.test(a.value))e.removeAttribute(a.name)});
+  d.querySelectorAll("a").forEach(a=>{
+    const h=a.getAttribute("href")||"";
+    let t=null;
+    if(h.startsWith("/wiki/")&&!a.classList.contains("new")){try{t=decodeURIComponent(h.slice(6).split("#")[0]).replace(/_/g," ")}catch(e){}}
+    if(t&&!BADNS.test(t)&&!a.closest(".reference,.references,.navbox,.metadata,.bandeau-container,.homonymie")&&!a.querySelector("img")){
+      const n=d.createElement("a");n.className="go";n.dataset.t=t;n.innerHTML=a.innerHTML;a.replaceWith(n);
+    }else{const s=d.createElement("span");s.className="dead";s.innerHTML=a.innerHTML;a.replaceWith(s)}
+  });
+  d.querySelectorAll("img").forEach(i=>{i.loading="lazy";const s=i.getAttribute("src")||"";if(s.startsWith("//"))i.src="https:"+s;i.removeAttribute("srcset")});
+  d.querySelectorAll("table").forEach(t=>{if(t.closest(".tw"))return;const w=d.createElement("div");w.className="tw";t.replaceWith(w);w.appendChild(t)});
+  // couper après "Notes et références"
+  const hs=[...d.querySelectorAll("h2")];for(const h of hs){if(/Notes et références|Références|Voir aussi|Liens externes|Bibliographie/i.test(h.textContent)){const blk=h.closest(".mw-heading")||h;let n=blk;while(n){const nx=n.nextElementSibling;n.remove();n=nx}break}}
+  return d.body.innerHTML;
+}
+
+/* ---------- Réseau (PeerJS, pair-à-pair) ---------- */
+let peer=null,host=false,conns=[],hostConn=null,roomCode="",myId="";
+let state={mode:"t",s:null,t:null,round:0,go:0,players:{}}; // vue partagée, maître = hôte
+let me={n:"",st:"lobby",p:"",c:0,ms:0,path:[]};
+const setNet=m=>$("net").textContent=m;
+const send=(c,m)=>{try{c.open&&c.send(m)}catch(e){}};
+const broadcast=()=>{for(const c of conns)send(c,{type:"state",state})};
+function upMe(){
+  me.n=myName();
+  const v={n:me.n,st:me.st,p:me.p,c:me.c,ms:me.ms,path:me.path.slice(-60)};
+  if(host){state.players[myId]=v;broadcast();render()}else if(hostConn)send(hostConn,{type:"me",v});
+}
+function onState(s){
+  const prevRound=state.round,prevGo=state.go;state=s;
+  if(s.round!==prevRound&&me.st!=="lobby"){toLobby()}
+  if(s.go&&s.go!==prevGo&&me.st==="lobby"&&!$("lobby").hidden)countdown();
+  render();
+}
+function hostMsg(c,m){
+  if(!m||typeof m!=="object")return;
+  if(m.type==="me"&&m.v&&typeof m.v==="object"){const v=m.v;state.players[c.peer]={n:String(v.n||"Joueur").slice(0,18),st:String(v.st||""),p:String(v.p||"").slice(0,200),c:+v.c||0,ms:+v.ms||0,path:Array.isArray(v.path)?v.path.slice(-60).map(x=>String(x).slice(0,200)):[]};broadcast();render()}
+  if(m.type==="start"&&me.st==="lobby"){startGo()}
+}
+function openRoom(code){
+  roomCode=code;store.set("wr-name",myName());
+  try{if(location.hash.slice(1)!==code)location.hash=code}catch(e){}
+  show("lobby");render();
+  if(!window.Peer){setNet("hors ligne");toast("Multijoueur indisponible : tu peux jouer seul.");becomeHost(true);return}
+  setNet("connexion…");
+  const id="wikiracing-fr-"+code;
+  peer=new Peer(id);
+  peer.on("open",pid=>{myId=pid;becomeHost(false)});
+  peer.on("error",e=>{
+    if(e.type==="unavailable-id"){peer.destroy();peer=new Peer();peer.on("open",pid=>{myId=pid;joinHost(id)});peer.on("error",e2=>{setNet("erreur réseau");toast("Connexion impossible : "+e2.type)})}
+    else if(e.type==="peer-unavailable"){setNet("salle introuvable");toast("Salle introuvable : le créateur a fermé la page ?")}
+    else{setNet("erreur réseau")}
+  });
+}
+function becomeHost(offline){
+  host=true;if(!myId)myId="moi";setNet(offline?"solo":"tu héberges la salle");
+  state={mode:"t",s:null,t:null,round:1,go:0,players:{}};
+  draw().then(()=>{upMe()});
+  if(peer)peer.on("connection",c=>{
+    c.on("open",()=>{if(conns.length>=5){c.close();return}conns.push(c);send(c,{type:"state",state})});
+    c.on("data",m=>hostMsg(c,m));
+    c.on("close",()=>{conns=conns.filter(x=>x!==c);delete state.players[c.peer];broadcast();render()});
+  });
+}
+function joinHost(id){
+  host=false;hostConn=peer.connect(id,{reliable:true});
+  hostConn.on("open",()=>{setNet("connecté");upMe()});
+  hostConn.on("data",m=>{if(m&&m.type==="state"&&m.state&&typeof m.state==="object")onState(m.state)});
+  hostConn.on("close",()=>{setNet("hôte parti");toast("Le créateur de la salle est parti.")});
+}
+
+/* ---------- Tirage ---------- */
+async function draw(s,t){
+  $("ls").textContent=$("lt").textContent="…";
+  for(let k=0;k<6;k++){
+    try{
+      const a=s||rnd(POOL);let b=t||rnd(POOL);while(!t&&b===a)b=rnd(POOL);
+      const[A,B]=await Promise.all([summary(a),summary(b)]);
+      if(norm(A.title)===norm(B.title))throw new Error("identiques");
+      state.s=A;state.t=B;state.go=0;broadcast();render();return true;
+    }catch(e){if(s||t){toast("Page introuvable ou ambiguë : "+e.message);render();return false}}
+  }
+  toast("Wikipédia ne répond pas, réessaie.");return false;
+}
+
+/* ---------- Rendu salle ---------- */
+function render(){
+  if(!$("lobby").hidden){
+    const s=state.s,t=state.t;
+    $("lhead").textContent=host?"Ta salle":"Salle de ton ami";
+    for(const b of document.querySelectorAll(".mode")){b.setAttribute("aria-pressed",b.dataset.m===state.mode);b.disabled=!host}
+    $("hostctl").hidden=!host;
+    if(s){$("ls").textContent=s.title;$("lsd").textContent=s.desc?s.desc:"";}
+    if(t){$("lt").textContent=t.title;$("ltd").innerHTML=(t.img&&/^https:\/\//.test(t.img)?`<img alt="" src="${esc(t.img)}">`:"")+esc(t.extract||t.desc);}
+    $("llink").textContent=location.href.split("#")[0]+"#"+roomCode;
+    const ps=Object.entries(state.players);
+    $("lplayers").innerHTML=ps.map(([id,v])=>`<li>${esc(v.n)}${id===myId?" (toi)":""}<span>${v.st==="race"?"en course":v.st==="done"?"arrivé":"prêt"}</span></li>`).join("")||`<li>${esc(myName())} (toi)<span>prêt</span></li>`;
+    $("lnote").textContent=ps.length<2?"En attente de tes amis… tu peux aussi jouer seul.":"";
+    $("go").disabled=!s||!t;
+  }
+  if(!$("race").hidden)renderOpp();
+  if(!$("end").hidden)renderEnd();
+}
+for(const b of document.querySelectorAll(".mode"))b.onclick=()=>{if(!host)return;state.mode=b.dataset.m;broadcast();render()};
+$("reroll").onclick=()=>host&&draw();
+$("custom").onclick=()=>{if(!host)return;const a=$("cs").value.trim(),b=$("ct").value.trim();if(!a&&!b)return;draw(a||state.s.title,b||state.t.title)};
+$("copylink").onclick=()=>copy($("llink").textContent,"Lien copié");
+function copy(t,msg){try{navigator.clipboard.writeText(t).then(()=>toast(msg),()=>toast("Copie refusée"))}catch(e){toast("Copie impossible")}}
+
+/* ---------- Course ---------- */
+function startGo(){state.go=Date.now()+"-"+Math.random().toString(36).slice(2,6);broadcast();countdown()}
+$("go").onclick=()=>{if(me.st!=="lobby")return;if(host)startGo();else if(hostConn)send(hostConn,{type:"start"});else countdown()};
+let t0=0,tick=0,hist=[],seen=new Set(),loadingTok=0,race=null;
+function countdown(){
+  if(me.st!=="lobby")return;me.st="cd";race={s:state.s,t:state.t,mode:state.mode};
+  let n=3;$("cdn").textContent=n;$("cd").classList.add("on");
+  article(race.s.title).catch(()=>{}); // préchauffe
+  const h=setInterval(()=>{n--;if(n>0)$("cdn").textContent=n;else{clearInterval(h);$("cd").classList.remove("on");startRace()}},800);
+}
+function startRace(){
+  me.st="race";me.c=0;me.ms=0;me.path=[race.s.title];hist=[];seen=new Set();t0=performance.now();
+  $("tgname").textContent=race.t.title;$("tdesc").textContent=race.t.extract||race.t.desc;
+  $("tdesc").classList.remove("on");show("race");load(race.s.title);
+  clearInterval(tick);tick=setInterval(()=>{$("clock").textContent=fmt(performance.now()-t0)},250);
+}
+$("tgbtn").onclick=()=>{const o=$("tdesc").classList.toggle("on");$("tgbtn").setAttribute("aria-expanded",o)};
+async function load(title){
+  const tok=++loadingTok;me.p=title;upMe();
+  $("clicks").textContent=me.c;$("back").disabled=!hist.length;
+  $("art").innerHTML=`<p class="loading">Chargement de « ${esc(title)} »…</p>`;window.scrollTo(0,0);
+  try{
+    const a=await article(title);if(tok!==loadingTok)return;
+    me.p=a.title;me.path[me.path.length-1]=a.title;seen.add(norm(a.title));
+    if(norm(a.title)===norm(race.t.title)){finish(true);return}
+    $("art").innerHTML=`<h1>${esc(a.title)}</h1><p class="from">Un article de Wikipédia, l'encyclopédie libre</p><div class="mw">${clean(a.html)}</div>`;
+    for(const x of $("art").querySelectorAll("a.go"))if(seen.has(norm(x.dataset.t)))x.classList.add("seen");
+    upMe();
+  }catch(e){if(tok!==loadingTok)return;$("art").innerHTML=`<p class="loading">Impossible de charger « ${esc(title)} ». <button class="btn ghost" id="retry">Réessayer</button></p>`;$("retry").onclick=()=>load(title)}
+}
+$("art").onclick=e=>{const a=e.target.closest("a.go");if(!a||me.st!=="race")return;e.preventDefault();const t=a.dataset.t;
+  hist.push(me.p);me.c++;me.path.push(t);
+  if(norm(t)===norm(race.t.title)){finish(true);return}
+  load(t)};
+$("back").onclick=()=>{if(!hist.length||me.st!=="race")return;const t=hist.pop();me.c++;me.path.push(t);load(t)};
+$("quit").onclick=()=>{if(me.st==="race")finish(false)};
+function finish(ok){clearInterval(tick);loadingTok++;me.ms=Math.round(performance.now()-t0);me.st=ok?"done":"quit";if(ok)me.p=race.t.title;show("end");upMe();renderEnd()}
+function renderOpp(){
+  $("opp").innerHTML=Object.entries(state.players).filter(([id,v])=>id!==myId&&v.st!=="lobby").map(([id,v])=>{
+    const where=v.st==="done"?"arrivé · "+(race.mode==="t"?fmt(v.ms):v.c+" clics"):v.st==="quit"?"abandon":v.p+" · "+v.c+" clic"+(v.c>1?"s":"");
+    return`<span class="${v.st==="done"?"fin":""}">${esc(v.n)} — ${esc(where)}</span>`}).join("");
+}
+function renderEnd(){
+  if(!race)return;
+  let all=Object.entries(state.players).map(([id,v])=>({...v,me:id===myId}));
+  if(!all.some(x=>x.me))all.push({n:myName(),st:me.st,c:me.c,ms:me.ms,me:true});
+  all=all.map(x=>x.me?{...x,st:me.st,c:me.c,ms:me.ms}:x);
+  const fin=all.filter(x=>x.st==="done").sort((a,b)=>race.mode==="t"?a.ms-b.ms||a.c-b.c:a.c-b.c||a.ms-b.ms),rest=all.filter(x=>x.st!=="done");
+  $("eres").innerHTML=fin.map((x,i)=>`<tr class="${x.me?"me":""}"><td class="pos">${i+1}</td><td>${esc(x.n)}${x.me?" (toi)":""}</td><td class="n">${x.c} clic${x.c>1?"s":""}</td><td class="n">${fmt(x.ms)}</td></tr>`).join("")+
+    rest.map(x=>`<tr class="${x.me?"me":""}"><td class="pos">–</td><td>${esc(x.n)}${x.me?" (toi)":""}</td><td class="n" colspan="2">${x.st==="quit"?"abandon":x.st==="lobby"?"en attente":"en course…"}</td></tr>`).join("");
+  $("ek").textContent=race.mode==="t"?"Classement · au temps":"Classement · au nombre de clics";
+  const rank=fin.findIndex(x=>x.me);
+  $("etitle").textContent=me.st!=="done"?"Abandon.":rank===0&&fin.length>1&&!rest.length?"Victoire !":rank===0&&fin.length>1?"En tête !":"Arrivé !";
+  $("elead").textContent=me.st==="done"?`${race.s.title} → ${race.t.title} en ${me.c} clic${me.c>1?"s":""} et ${fmt(me.ms)}.`:`Il fallait aller de ${race.s.title} à ${race.t.title}.`;
+  $("mypath").innerHTML=me.path.map((x,i)=>`<span class="chip ${i==0?"s":norm(x)===norm(race.t.title)?"t":""}">${esc(x)}</span>`).join('<span class="arr">→</span>');
+  $("again").textContent=host?"Nouvelle course dans la salle":"Revenir à la salle";
+}
+function toLobby(){clearInterval(tick);loadingTok++;me={n:myName(),st:"lobby",p:"",c:0,ms:0,path:[]};show("lobby");upMe();render()}
+$("again").onclick=()=>{if(host){state.round++;state.go=0;for(const v of Object.values(state.players))v.st="lobby";toLobby();draw()}else toLobby()};
+$("copyres").onclick=()=>copy(`Wiki Racing — ${race.s.title} → ${race.t.title} : ${me.st==="done"?me.c+" clics en "+fmt(me.ms):"abandon"}\n${me.path.join(" → ")}`,"Résultat copié");
+$("create").onclick=()=>openRoom(Math.random().toString(36).slice(2,8));
+nameIn.onchange=()=>{store.set("wr-name",myName());upMe()};
+
+const h=location.hash.slice(1);
+show("home");
+if(/^[a-z0-9]{4,10}$/.test(h)){$("create").textContent="Rejoindre la salle";document.querySelector("#home .lead").textContent="Un ami t'invite à une course. Choisis ton pseudo et rejoins-le.";$("create").onclick=()=>openRoom(h)}
+}
+</script>
+</body></html>
