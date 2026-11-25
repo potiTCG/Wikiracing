@@ -63,7 +63,8 @@ input:focus-visible,button:focus-visible{outline:3px solid var(--link);outline-o
 .mw .infobox,.mw .infobox_v2,.mw .infobox_v3,.mw .thumb,.mw figure{float:none!important;width:auto!important;max-width:100%;margin:12px 0!important;background:var(--card);border-radius:12px;padding:8px}
 .mw .infobox_v3 .entete,.mw .infobox_v2 caption{font:700 16px Archivo}
 .mw h2,.mw h3,.mw h4{font-family:Archivo;font-stretch:85%;line-height:1.2;margin:26px 0 8px}
-.mw .mw-editsection,.mw sup.reference,.mw .reference,.mw .references,.mw .navbox,.mw .navbox-container,.mw .metadata,.mw .bandeau-container,.mw .bandeau-portail,.mw .homonymie,.mw .noprint,.mw #toc,.mw .toc,.mw .mw-empty-elt,.mw .printfooter,.mw .catlinks,.mw .autres-projets,.mw .bandeau-article{display:none!important}
+.mw .mw-editsection,.mw sup.reference,.mw .references,.mw .reflist,.mw #toc,.mw .toc,.mw .mw-empty-elt,.mw .printfooter,.mw .catlinks,.mw .autres-projets,.mw .bandeau-portail{display:none!important}
+.mw .navbox,.mw .navbox-container{font-size:13px;margin-top:18px}.mw .navbox th{text-align:left;background:var(--card)}
 .mw .hatnote{font-style:italic;color:var(--mut)}
 .loading{padding:40px 0;color:var(--mut);font:600 16px Archivo}
 .tools{display:flex;gap:10px;margin:24px 0 40px}.tools .btn{font-size:15px;min-height:46px}
@@ -104,8 +105,9 @@ section[hidden]{display:none}
     <div class="card tgt"><p class="k">Arrivée — à trouver</p><p class="big" id="lt">…</p><p class="desc" id="ltd"></p></div>
   </div>
   <div id="hostctl">
+    <div class="modes" style="margin-top:12px"><button class="mode pool" data-p="c" aria-pressed="true"><b>Pages connues</b><span>Environ 250 sujets célèbres.</span></button><button class="mode pool" data-p="a"><b>Tout Wikipédia</b><span>N'importe quel article de fond.</span></button></div>
     <div class="row"><button class="btn ghost" id="reroll">Autre tirage</button></div>
-    <div class="row"><input id="cs" placeholder="Départ perso (ex : Sushi)"><input id="ct" placeholder="Arrivée perso"></div>
+    <div class="row"><input id="cs" list="dl-cs" placeholder="Départ perso (ex : Sushi)" autocomplete="off"><input id="ct" list="dl-ct" placeholder="Arrivée perso" autocomplete="off"><datalist id="dl-cs"></datalist><datalist id="dl-ct"></datalist></div>
     <div class="row"><button class="btn ghost" id="custom">Utiliser ces pages</button></div>
   </div>
   <div class="card"><p class="k">Envoie ce lien à 1 ou 2 amis — « Partager » évite de quitter le jeu</p>
@@ -169,6 +171,20 @@ async function summary(title){
   const o={title:j.title,extract:j.extract||"",desc:j.description||"",img:j.thumbnail&&j.thumbnail.source||""};
   sumCache[title]=sumCache[o.title]=o;return o;
 }
+async function resolve(q){
+  try{return await summary(q)}catch(e){}
+  const j=await(await fetch(API+"?action=query&format=json&formatversion=2&origin=*&list=search&srnamespace=0&srlimit=6&srsearch="+encodeURIComponent(q))).json();
+  for(const r of(j.query&&j.query.search||[])){try{return await summary(r.title)}catch(e){}}
+  throw new Error("aucun article trouvé pour « "+q+" »");
+}
+const sugT={};
+function suggest(inp){
+  const q=inp.value.trim();clearTimeout(sugT[inp.id]);if(q.length<2)return;
+  sugT[inp.id]=setTimeout(async()=>{try{
+    const j=await(await fetch(API+"?action=opensearch&format=json&origin=*&namespace=0&limit=8&search="+encodeURIComponent(q))).json();
+    $("dl-"+inp.id).innerHTML=(j[1]||[]).map(t=>`<option value="${esc(t)}"></option>`).join("");
+  }catch(e){}},250);
+}
 async function article(title){
   const u=API+"?action=parse&format=json&formatversion=2&origin=*&redirects=1&prop=text&disableeditsection=1&disabletoc=1&page="+encodeURIComponent(title);
   const j=await(await fetch(u)).json();
@@ -184,14 +200,12 @@ function clean(html){
     const h=a.getAttribute("href")||"";
     let t=null;
     if(h.startsWith("/wiki/")&&!a.classList.contains("new")){try{t=decodeURIComponent(h.slice(6).split("#")[0]).replace(/_/g," ")}catch(e){}}
-    if(t&&!BADNS.test(t)&&!a.closest(".reference,.references,.navbox,.metadata,.bandeau-container,.homonymie")&&!a.querySelector("img")){
+    if(t&&!BADNS.test(t)&&!a.closest(".reference,.references,.reflist")&&!a.querySelector("img")){
       const n=d.createElement("a");n.className="go";n.dataset.t=t;n.innerHTML=a.innerHTML;a.replaceWith(n);
     }else{const s=d.createElement("span");s.className="dead";s.innerHTML=a.innerHTML;a.replaceWith(s)}
   });
   d.querySelectorAll("img").forEach(i=>{i.loading="lazy";const s=i.getAttribute("src")||"";if(s.startsWith("//"))i.src="https:"+s;i.removeAttribute("srcset")});
   d.querySelectorAll("table").forEach(t=>{if(t.closest(".tw"))return;const w=d.createElement("div");w.className="tw";t.replaceWith(w);w.appendChild(t)});
-  // couper après "Notes et références"
-  const hs=[...d.querySelectorAll("h2")];for(const h of hs){if(/Notes et références|Références|Voir aussi|Liens externes|Bibliographie/i.test(h.textContent)){const blk=h.closest(".mw-heading")||h;let n=blk;while(n){const nx=n.nextElementSibling;n.remove();n=nx}break}}
   return d.body.innerHTML;
 }
 
@@ -294,15 +308,24 @@ function connectHost(){
 }
 
 /* ---------- Tirage ---------- */
+async function randomBig(){
+  for(let k=0;k<4;k++){
+    const j=await(await fetch(API+"?action=query&format=json&formatversion=2&origin=*&generator=random&grnnamespace=0&grnlimit=30&prop=info|pageprops&ppprop=disambiguation")).json();
+    const ok=(j.query&&j.query.pages||[]).filter(x=>x.length>30000&&!(x.pageprops&&"disambiguation" in x.pageprops)&&!/^(Liste|Chronologie|Élections?) /.test(x.title)).sort((a,b)=>b.length-a.length);
+    if(ok.length)return ok[0].title;
+  }
+  return rnd(POOL);
+}
 async function draw(s,t){
   $("ls").textContent=$("lt").textContent="…";
   for(let k=0;k<6;k++){
     try{
-      const a=s||rnd(POOL);let b=t||rnd(POOL);while(!t&&b===a)b=rnd(POOL);
-      const[A,B]=await Promise.all([summary(a),summary(b)]);
+      const any=state.pool==="a";
+      const a=s||(any?await randomBig():rnd(POOL));let b=t||(any?await randomBig():rnd(POOL));while(!t&&b===a)b=rnd(POOL);
+      const[A,B]=await Promise.all([s?resolve(a):summary(a),t?resolve(b):summary(b)]);
       if(norm(A.title)===norm(B.title))throw new Error("identiques");
       state.s=A;state.t=B;state.go=0;broadcast();render();return true;
-    }catch(e){if(s||t){toast("Page introuvable ou ambiguë : "+e.message);render();return false}}
+    }catch(e){if(s||t){toast("Page introuvable : "+e.message);render();return false}}
   }
   toast("Wikipédia ne répond pas, réessaie.");return false;
 }
@@ -312,7 +335,8 @@ function render(){
   if(!$("lobby").hidden){
     const s=state.s,t=state.t;
     $("lhead").textContent=host?"Ta salle":"Salle de ton ami";
-    for(const b of document.querySelectorAll(".mode")){b.setAttribute("aria-pressed",b.dataset.m===state.mode);b.disabled=!host}
+    for(const b of document.querySelectorAll(".mode[data-m]")){b.setAttribute("aria-pressed",b.dataset.m===state.mode);b.disabled=!host}
+    for(const b of document.querySelectorAll(".pool")){b.setAttribute("aria-pressed",b.dataset.p===(state.pool||"c"));b.disabled=!host}
     $("hostctl").hidden=!host;
     if(s){$("ls").textContent=s.title;$("lsd").textContent=s.desc?s.desc:"";}
     if(t){$("lt").textContent=t.title;$("ltd").innerHTML=(t.img&&/^https:\/\//.test(t.img)?`<img alt="" src="${esc(t.img)}">`:"")+esc(t.extract||t.desc);}
@@ -325,9 +349,11 @@ function render(){
   if(!$("race").hidden)renderOpp();
   if(!$("end").hidden)renderEnd();
 }
-for(const b of document.querySelectorAll(".mode"))b.onclick=()=>{if(!host)return;state.mode=b.dataset.m;broadcast();render()};
+for(const b of document.querySelectorAll(".mode[data-m]"))b.onclick=()=>{if(!host)return;state.mode=b.dataset.m;broadcast();render()};
+for(const b of document.querySelectorAll(".pool"))b.onclick=()=>{if(!host)return;state.pool=b.dataset.p;broadcast();render();draw()};
+$("cs").oninput=()=>suggest($("cs"));$("ct").oninput=()=>suggest($("ct"));
 $("reroll").onclick=()=>host&&draw();
-$("custom").onclick=()=>{if(!host)return;const a=$("cs").value.trim(),b=$("ct").value.trim();if(!a&&!b)return;draw(a||state.s.title,b||state.t.title)};
+$("custom").onclick=()=>{if(!host)return;const a=$("cs").value.trim(),b=$("ct").value.trim();if(!a&&!b)return;draw(a||state.s.title,b||state.t.title).then(ok=>{if(ok){$("cs").value="";$("ct").value=""}})};
 $("copylink").onclick=()=>copy($("llink").textContent,"Lien copié");
 $("sharelink").onclick=()=>{const url=$("llink").textContent;if(navigator.share)navigator.share({title:"Wiki Racing",text:"Viens faire une course Wikipédia contre moi !",url}).catch(()=>{});else copy(url,"Lien copié")};
 function copy(t,msg){try{navigator.clipboard.writeText(t).then(()=>toast(msg),()=>toast("Copie refusée"))}catch(e){toast("Copie impossible")}}
