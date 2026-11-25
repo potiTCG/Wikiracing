@@ -108,9 +108,9 @@ section[hidden]{display:none}
     <div class="row"><input id="cs" placeholder="Départ perso (ex : Sushi)"><input id="ct" placeholder="Arrivée perso"></div>
     <div class="row"><button class="btn ghost" id="custom">Utiliser ces pages</button></div>
   </div>
-  <div class="card"><p class="k">Envoie ce lien à 1 ou 2 amis</p>
+  <div class="card"><p class="k">Envoie ce lien à 1 ou 2 amis — « Partager » évite de quitter le jeu</p>
     <div class="code" id="llink"></div>
-    <div class="row"><button class="btn ghost" id="copylink">Copier le lien</button></div>
+    <div class="row"><button class="btn red" id="sharelink">Partager</button><button class="btn ghost" id="copylink">Copier</button></div>
   </div>
   <div class="card"><p class="k">Sur la ligne de départ</p><ul class="players" id="lplayers"></ul><p class="note" id="lnote"></p></div>
   <div class="row"><button class="btn red" id="go">Lancer la course</button></div>
@@ -233,36 +233,64 @@ function checkEnd(){
   else if(!racing.length)state.end={rd:state.round,id:null,n:null};
   hostCut();
 }
+let hostId="",wasHost=false,everOpen=false,fixTimer=0,tries=0;
 function openRoom(code){
   roomCode=code;store.set("wr-name",myName());
   try{if(location.hash.slice(1)!==code)location.hash=code}catch(e){}
   show("lobby");render();
   if(!window.Peer){setNet("hors ligne");toast("Multijoueur indisponible : tu peux jouer seul.");becomeHost(true);return}
-  setNet("connexion…");
-  const id="wikiracing-fr-"+code;
-  peer=new Peer(id);
-  peer.on("open",pid=>{myId=pid;becomeHost(false)});
-  peer.on("error",e=>{
-    if(e.type==="unavailable-id"){peer.destroy();peer=new Peer();peer.on("open",pid=>{myId=pid;joinHost(id)});peer.on("error",e2=>{setNet("erreur réseau");toast("Connexion impossible : "+e2.type)})}
-    else if(e.type==="peer-unavailable"){setNet("salle introuvable");toast("Salle introuvable : le créateur a fermé la page ?")}
-    else{setNet("erreur réseau")}
+  hostId="wikiracing-fr-"+code;setNet("connexion…");
+  startPeer(true);
+  setInterval(fix,5000);
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")fix(true)});
+  addEventListener("online",()=>fix(true));addEventListener("pageshow",()=>fix(true));
+}
+function startPeer(tryHost){
+  const pr=tryHost?new Peer(hostId):new Peer();peer=pr;
+  pr.on("open",pid=>{
+    if(pr!==peer)return;tries=0;myId=pid;
+    if(tryHost){if(!wasHost){wasHost=true;becomeHost(false)}else setNet("tu héberges la salle")}
+    else connectHost();
   });
+  if(tryHost)pr.on("connection",onGuestConn);
+  pr.on("disconnected",()=>{if(pr!==peer)return;setNet("reconnexion…");later(()=>{if(pr===peer&&!pr.destroyed&&pr.disconnected)try{pr.reconnect()}catch(e){}},800)});
+  pr.on("close",()=>{if(pr===peer)later(fix,1000)});
+  pr.on("error",e=>{
+    if(pr!==peer)return;
+    if(e.type==="unavailable-id"){
+      if(!wasHost){pr.destroy();host=false;startPeer(false)}        // la salle existe : on la rejoint
+      else{setNet("reconnexion…");pr.destroy();later(()=>startPeer(true),3000)} // l'ancienne connexion n'est pas encore libérée
+    }else if(e.type==="peer-unavailable"){tries++;setNet("en attente de l'hôte…");if(tries===4)toast("L'hôte n'est pas joignable. Il a peut-être quitté l'app : ça reprend dès qu'il revient.");later(connectHost,2500)}
+    else{setNet("reconnexion…");later(fix,2000)}
+  });
+}
+function later(f,ms){setTimeout(f,ms)}
+function fix(now){
+  if(!peer||!hostId)return;
+  if(peer.destroyed){startPeer(wasHost);return}
+  if(peer.disconnected){try{peer.reconnect()}catch(e){}return}
+  if(!wasHost&&peer.open&&(!hostConn||!hostConn.open)&&(now||!connecting))connectHost();
+}
+function onGuestConn(c){
+  c.on("open",()=>{for(const o of conns.filter(x=>x.peer===c.peer))try{o.close()}catch(e){}conns=conns.filter(x=>x.peer!==c.peer);if(conns.length>=5){c.close();return}conns.push(c);send(c,{type:"state",state})});
+  c.on("data",m=>hostMsg(c,m));
+  c.on("close",()=>{conns=conns.filter(x=>x!==c);setTimeout(()=>{if(!conns.some(x=>x.peer===c.peer&&x.open)){delete state.players[c.peer];checkEnd();broadcast();render()}},20000)});
 }
 function becomeHost(offline){
   host=true;if(!myId)myId="moi";setNet(offline?"solo":"tu héberges la salle");
   state={mode:"t",s:null,t:null,round:1,go:0,players:{}};
   draw().then(()=>{upMe()});
-  if(peer)peer.on("connection",c=>{
-    c.on("open",()=>{if(conns.length>=5){c.close();return}conns.push(c);send(c,{type:"state",state})});
-    c.on("data",m=>hostMsg(c,m));
-    c.on("close",()=>{conns=conns.filter(x=>x!==c);delete state.players[c.peer];broadcast();render()});
-  });
 }
-function joinHost(id){
-  host=false;hostConn=peer.connect(id,{reliable:true});
-  hostConn.on("open",()=>{setNet("connecté");upMe()});
-  hostConn.on("data",m=>{if(m&&m.type==="state"&&m.state&&typeof m.state==="object")onState(m.state)});
-  hostConn.on("close",()=>{setNet("hôte parti");toast("Le créateur de la salle est parti.")});
+let connecting=false;
+function connectHost(){
+  if(!peer||peer.destroyed||!peer.open||connecting)return;
+  connecting=true;host=false;
+  const c=peer.connect(hostId,{reliable:true});
+  const t=setTimeout(()=>{if(!c.open){connecting=false;try{c.close()}catch(e){}}},8000);
+  c.on("open",()=>{clearTimeout(t);connecting=false;tries=0;if(hostConn&&hostConn!==c)try{hostConn.close()}catch(e){}hostConn=c;setNet("connecté");upMe()});
+  c.on("data",m=>{if(c===hostConn&&m&&m.type==="state"&&m.state&&typeof m.state==="object")onState(m.state)});
+  c.on("close",()=>{clearTimeout(t);connecting=false;if(c===hostConn){setNet("reconnexion…");later(()=>fix(true),1500)}});
+  c.on("error",()=>{connecting=false});
 }
 
 /* ---------- Tirage ---------- */
@@ -301,6 +329,7 @@ for(const b of document.querySelectorAll(".mode"))b.onclick=()=>{if(!host)return
 $("reroll").onclick=()=>host&&draw();
 $("custom").onclick=()=>{if(!host)return;const a=$("cs").value.trim(),b=$("ct").value.trim();if(!a&&!b)return;draw(a||state.s.title,b||state.t.title)};
 $("copylink").onclick=()=>copy($("llink").textContent,"Lien copié");
+$("sharelink").onclick=()=>{const url=$("llink").textContent;if(navigator.share)navigator.share({title:"Wiki Racing",text:"Viens faire une course Wikipédia contre moi !",url}).catch(()=>{});else copy(url,"Lien copié")};
 function copy(t,msg){try{navigator.clipboard.writeText(t).then(()=>toast(msg),()=>toast("Copie refusée"))}catch(e){toast("Copie impossible")}}
 
 /* ---------- Course ---------- */
